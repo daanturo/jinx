@@ -864,6 +864,17 @@ If prefix argument ALL non-nil correct all misspellings."
         (goto-char old-point)
         (jinx--in-base-buffer #'jit-lock-refontify (window-start) (window-end))))))
 
+;;;###autoload
+(defun jinx-correct-word-at-point ()
+  "Correct word at cursor.
+Suggest corrections even if it's not misspelled."
+  (interactive)
+  (unless jinx-mode (jinx-mode 1))
+  (pcase-let ((`(,beg . ,end) (bounds-of-thing-at-point 'word)))
+    (if (and beg end)
+        (jinx--correct beg end)
+      (user-error "No word at point"))))
+
 (defun jinx-correct-select ()
   "Quick selection key for corrections."
   (interactive)
