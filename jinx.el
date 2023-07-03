@@ -581,11 +581,11 @@ If CHECK is non-nil, always check first."
           (setq mod-file (expand-file-name mod-name))))
       (module-load mod-file))))
 
-(defun jinx--correct-highlight (overlay fun)
-  "Highlight and show OVERLAY during FUN."
+(defun jinx--correct-highlight (start end fun)
+  "Highlight and show region between START and END during FUN."
   (declare (indent 1))
   (let (restore)
-    (goto-char (overlay-end overlay))
+    (goto-char end)
     (unwind-protect
         (progn
           (if (and (derived-mode-p #'org-mode)
@@ -607,7 +607,7 @@ If CHECK is non-nil, always check first."
                           (overlay-put ov 'invisible nil)
                           (lambda () (overlay-put ov 'invisible inv)))
                         restore)))))
-          (let ((hl (make-overlay (overlay-start overlay) (overlay-end overlay))))
+          (let ((hl (make-overlay start end)))
             (overlay-put hl 'face 'jinx-highlight)
             (overlay-put hl 'window (selected-window))
             (push (lambda () (delete-overlay hl)) restore))
@@ -696,12 +696,14 @@ If CHECK is non-nil, always check first."
                    (annotation-function . jinx--correct-annotation))
       (complete-with-action action word str pred))))
 
-(defun jinx--correct (overlay info)
-  "Correct word at OVERLAY, maybe show prompt INFO."
+(defun jinx--correct (start end &optional info post-replace)
+  "Correct word between START and END, maybe show prompt INFO.
+POST-REPLACE is a function to be called with 0 arguments after
+successfully replacing."
   (let* ((word (buffer-substring-no-properties
-                (overlay-start overlay) (overlay-end overlay)))
+                start end))
          (choice
-          (jinx--correct-highlight overlay
+          (jinx--correct-highlight start end
             (lambda ()
               (when (or (< (point) (window-start)) (> (point) (window-end nil t)))
                 (recenter))
@@ -718,14 +720,14 @@ If CHECK is non-nil, always check first."
        (funcall fun 'save key (if (> len 1) (substring choice 1) word))
        (jinx--recheck-overlays))
       ((guard (not (equal choice word)))
-       (jinx--correct-replace overlay choice)))))
+       (jinx--correct-replace start end choice)
+       (when post-replace
+         (funcall post-replace))))))
 
-(defun jinx--correct-replace (overlay word)
-  "Replace OVERLAY with WORD."
-  (when-let ((start (overlay-start overlay))
-             (end (overlay-end overlay)))
+(defun jinx--correct-replace (start end word)
+  "Replace region between START and END with WORD."
+  (when (and start end)
     (undo-boundary)
-    (delete-overlay overlay)
     (goto-char end)
     (insert-before-markers word)
     (delete-region start end)))
@@ -850,7 +852,10 @@ If prefix argument ALL non-nil correct all misspellings."
                          (catch 'jinx--goto
                            (unless deleted
                              (jinx--correct
-                              ov (and all (format " (%d of %d)" (1+ idx) count)))))))
+                              (overlay-start ov)
+                              (overlay-end ov)
+                              (and all (format " (%d of %d)" (1+ idx) count))
+                              (lambda () (delete-overlay ov)))))))
                    (cond
                     ((integerp skip) (setq idx (mod (+ idx skip) count)))
                     ((or all deleted) (cl-incf idx))))))
