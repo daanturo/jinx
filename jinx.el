@@ -743,26 +743,38 @@ If CHECK is non-nil, always check first."
   (modify-syntax-entry ?’ "w" jinx--syntax-table)
   (modify-syntax-entry ?. "." jinx--syntax-table))
 
+(defmacro jinx--guard-correction (&rest body)
+  "Perform BODY with some appropriate guards for correction."
+  (declare (debug t))
+  `(progn
+     (unless jinx-mode
+       (jinx-mode 1))
+     (cl-letf* (((symbol-function #'jinx--timer-handler) #'ignore) ;; Inhibit
+                (repeat-mode nil) ;; No repeating of jinx-next and jinx-previous
+                (old-point (point-marker)))
+       (unwind-protect
+           (progn
+             ,@body)
+         (goto-char old-point)))))
+
 (defun jinx--correct-overlays (overlays &optional show-count)
   "Correct words at OVERLAYS.
 If SHOW-COUNT is non-nil, show the index of the correcting words."
-  (cl-letf* (((symbol-function #'jinx--timer-handler) #'ignore) ;; Inhibit
-             (repeat-mode nil) ;; No repeating of jinx-next and jinx-previous
-             (count (length overlays))
-             (idx 0))
-    (unwind-protect
-        (while (when-let ((ov (nth idx overlays)))
-                 (let* ((deleted (not (overlay-buffer ov)))
-                        (skip
-                         (catch 'jinx--goto
-                           (unless deleted
-                             (jinx--correct
-                              (overlay-start ov)
-                              (overlay-end ov)
-                              (and show-count (format " (%d of %d)" (1+ idx) count)))))))
-                   (cond
-                    ((integerp skip) (setq idx (mod (+ idx skip) count)))
-                    ((or show-count deleted) (cl-incf idx)))))))))
+  (jinx--guard-correction
+   (let* ((count (length overlays))
+          (idx 0))
+     (while (when-let ((ov (nth idx overlays)))
+              (let* ((deleted (not (overlay-buffer ov)))
+                     (skip
+                      (catch 'jinx--goto
+                        (unless deleted
+                          (jinx--correct
+                           (overlay-start ov)
+                           (overlay-end ov)
+                           (and show-count (format " (%d of %d)" (1+ idx) count)))))))
+                (cond
+                 ((integerp skip) (setq idx (mod (+ idx skip) count)))
+                 ((or show-count deleted) (cl-incf idx)))))))))
 
 (defun jinx--bounds-of-word-at-point ()
   "Return bounds of word at point as a cons cell.
@@ -861,20 +873,15 @@ With prefix argument GLOBAL change the languages globally."
 (defun jinx-correct-visible ()
   "Correct visibly misspelled words in current window."
   (interactive)
-  (unless jinx-mode (jinx-mode 1))
-  (let* ((old-point (point-marker)))
-    (unwind-protect
-        (jinx--correct-overlays
-         (jinx--force-overlays (window-start) (window-end) :visible t))
-      (goto-char old-point)
-      (jinx--in-base-buffer #'jit-lock-refontify (window-start) (window-end)))))
+  (unwind-protect
+      (jinx--correct-overlays
+       (jinx--force-overlays (window-start) (window-end) :visible t))
+    (jinx--in-base-buffer #'jit-lock-refontify (window-start) (window-end))))
 
 ;;;###autoload
 (defun jinx-correct-buffer ()
   "Correct all misspelled words in current buffer."
   (interactive)
-  (unless jinx-mode (jinx-mode 1))
-  (push-mark)
   (unwind-protect
       (jinx--correct-overlays
        (jinx--force-overlays (point-min) (point-max) :check t)
@@ -921,11 +928,18 @@ If prefix argument ALL non-nil correct all misspellings."
   "Correct word at cursor.
 Suggest corrections even if it's not misspelled."
   (interactive)
-  (unless jinx-mode (jinx-mode 1))
-  (pcase-let ((`(,beg . ,end) (jinx--bounds-of-word-at-point)))
-    (if (and beg end)
-        (jinx--correct beg end)
-      (user-error "No word at point"))))
+  (jinx--guard-correction
+   (while (pcase-let* ((`(,beg . ,end) (jinx--bounds-of-word-at-point))
+                       (skip
+                        (catch 'jinx--goto
+                          (if (and beg end)
+                              (jinx--correct beg end)
+                            (user-error "No word at point")))))
+            ;; use jinx-next/previous to move among words
+            (cond
+             ((integerp skip)
+              (forward-to-word skip)
+              t))))))
 
 (defun jinx-correct-select ()
   "Quick selection key for corrections."
