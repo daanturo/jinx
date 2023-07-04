@@ -919,11 +919,19 @@ If prefix argument ALL non-nil correct all misspellings."
   "Correct word at cursor.
 Suggest corrections even if it's not misspelled."
   (interactive)
-  (unless jinx-mode (jinx-mode 1))
-  (pcase-let ((`(,beg . ,end) (jinx--bounds-of-word-at-point)))
-    (if (and beg end)
-        (jinx--correct beg end)
-      (user-error "No word at point"))))
+  (unless jinx-mode
+    (jinx-mode 1))
+  (while (pcase-let* ((`(,beg . ,end) (jinx--bounds-of-word-at-point))
+                      (skip
+                       (catch 'jinx--goto
+                         (if (and beg end)
+                             (jinx--correct beg end)
+                           (user-error "No word at point")))))
+           ;; use jinx-next/previous to move among words
+           (cond
+            ((integerp skip)
+             (forward-to-word skip)
+             t)))))
 
 (defun jinx-correct-select ()
   "Quick selection key for corrections."
