@@ -696,10 +696,8 @@ If CHECK is non-nil, always check first."
                    (annotation-function . jinx--correct-annotation))
       (complete-with-action action word str pred))))
 
-(defun jinx--correct (start end &optional info post-replace)
-  "Correct word between START and END, maybe show prompt INFO.
-POST-REPLACE is a function to be called with 0 arguments after
-successfully replacing."
+(defun jinx--correct (start end &optional info)
+  "Correct word between START and END, maybe show prompt INFO."
   (let* ((word (buffer-substring-no-properties
                 start end))
          (choice
@@ -720,14 +718,13 @@ successfully replacing."
        (funcall fun 'save key (if (> len 1) (substring choice 1) word))
        (jinx--recheck-overlays))
       ((guard (not (equal choice word)))
-       (jinx--correct-replace start end choice)
-       (when post-replace
-         (funcall post-replace))))))
+       (jinx--correct-replace start end choice)))))
 
 (defun jinx--correct-replace (start end word)
   "Replace region between START and END with WORD."
   (when (and start end)
     (undo-boundary)
+    (jinx--delete-overlays start end)
     (goto-char end)
     (insert-before-markers word)
     (delete-region start end)))
@@ -854,8 +851,7 @@ If prefix argument ALL non-nil correct all misspellings."
                              (jinx--correct
                               (overlay-start ov)
                               (overlay-end ov)
-                              (and all (format " (%d of %d)" (1+ idx) count))
-                              (lambda () (delete-overlay ov)))))))
+                              (and all (format " (%d of %d)" (1+ idx) count)))))))
                    (cond
                     ((integerp skip) (setq idx (mod (+ idx skip) count)))
                     ((or all deleted) (cl-incf idx))))))
