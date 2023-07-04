@@ -764,6 +764,24 @@ If SHOW-COUNT is non-nil, show the index of the correcting words."
                     ((integerp skip) (setq idx (mod (+ idx skip) count)))
                     ((or show-count deleted) (cl-incf idx)))))))))
 
+(defun jinx--bounds-of-word-at-point ()
+  "Return bounds of word at point as a cons cell.
+Depends of `jinx--syntax-table'."
+  (save-excursion
+    (save-match-data
+      (let* ((start (point))
+             (end (point)))
+        (set-syntax-table jinx--syntax-table)
+        (unless (looking-at-p "\\<")
+          (re-search-backward "\\<\\|^")
+          (setq start (match-beginning 0)))
+        (unless (looking-at-p "\\>")
+          (re-search-forward "\\>\\|$")
+          (setq end (match-beginning 0)))
+        (goto-char start)
+        (when (re-search-forward "\\<\\w+\\>" end t)
+          (cons (match-beginning 0) (match-end 0)))))))
+
 ;;;; Save functions
 
 (defun jinx--save-action (key word ann)
@@ -911,7 +929,7 @@ If prefix argument ALL non-nil correct all misspellings."
 Suggest corrections even if it's not misspelled."
   (interactive)
   (unless jinx-mode (jinx-mode 1))
-  (pcase-let ((`(,beg . ,end) (bounds-of-thing-at-point 'word)))
+  (pcase-let ((`(,beg . ,end) (jinx--bounds-of-word-at-point)))
     (if (and beg end)
         (jinx--correct beg end)
       (user-error "No word at point"))))
