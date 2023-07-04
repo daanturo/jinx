@@ -766,20 +766,13 @@ If SHOW-COUNT is non-nil, show the index of the correcting words."
 
 (defun jinx--bounds-of-word-at-point ()
   "Return bounds of word at point as a cons cell.
-Depends of `jinx--syntax-table'."
+Using `jinx--syntax-table'."
   (save-excursion
     (save-match-data
-      (let* ((start (point))
-             (end (point)))
-        (set-syntax-table jinx--syntax-table)
+      (with-syntax-table jinx--syntax-table
         (unless (looking-at-p "\\<")
-          (re-search-backward "\\<\\|^")
-          (setq start (match-beginning 0)))
-        (unless (looking-at-p "\\>")
-          (re-search-forward "\\>\\|$")
-          (setq end (match-beginning 0)))
-        (goto-char start)
-        (when (re-search-forward "\\<\\w+\\>" end t)
+          (re-search-backward "\\<\\|^"))
+        (when (re-search-forward "\\<\\w+\\>" (pos-eol) t)
           (cons (match-beginning 0) (match-end 0)))))))
 
 ;;;; Save functions
