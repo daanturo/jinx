@@ -350,9 +350,10 @@ Predicate may return a position to skip forward.")
               (cl-loop for f in face thereis (memq f jinx--exclude-faces))
             (memq face jinx--exclude-faces))))))
 
-(defun jinx--word-valid-p (start)
-  "Return non-nil if word at START is valid."
-  (let ((word (buffer-substring-no-properties start (point))))
+(defun jinx--word-valid-p (start &optional end)
+  "Return non-nil if word between START and END is valid.
+END defaults to `point'."
+  (let ((word (buffer-substring-no-properties start (or end (point)))))
     (or (member word jinx--session-words)
         (cl-loop for dict in jinx--dicts
                  thereis (jinx--mod-check dict word)))))
@@ -950,7 +951,7 @@ If prefix argument ALL non-nil correct all misspellings."
     (cond
      (all
       (jinx-correct-buffer))
-     ((not (jinx--word-valid-p beg))
+     ((not (jinx--word-valid-p beg end))
       (jinx-correct-at-point beg end))
      (t
       (jinx-correct-visible)))))
