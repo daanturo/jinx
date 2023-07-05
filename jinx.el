@@ -350,12 +350,16 @@ Predicate may return a position to skip forward.")
               (cl-loop for f in face thereis (memq f jinx--exclude-faces))
             (memq face jinx--exclude-faces))))))
 
+(defun jinx--word-corrected-p (word)
+  "Return non-nil if WORD is valid."
+  (or (member word jinx--session-words)
+      (cl-loop for dict in jinx--dicts thereis
+               (jinx--mod-check dict word))))
+
 (defun jinx--word-valid-p (start)
   "Return non-nil if word at START is valid."
   (let ((word (buffer-substring-no-properties start (point))))
-    (or (member word jinx--session-words)
-        (cl-loop for dict in jinx--dicts
-                 thereis (jinx--mod-check dict word)))))
+    (jinx--word-corrected-p word)))
 
 ;;;; Internal functions
 
@@ -923,6 +927,7 @@ If prefix argument ALL non-nil correct all misspellings."
         (goto-char old-point)
         (jinx--in-base-buffer #'jit-lock-refontify (window-start) (window-end))))))
 
+;;;###autoload
 (defun jinx-correct-at-point (&optional beg end)
   "Correct a word between BEG and END, defaults to the one at the cursor.
 Suggest corrections even if it's not misspelled."
@@ -946,14 +951,13 @@ Suggest corrections even if it's not misspelled."
   "Correct misspelled word at point, or visible ones.
 If prefix argument ALL non-nil correct all misspellings."
   (interactive "*P")
-  (pcase-let* ((`(,beg . ,end) (jinx--bounds-of-word-at-point)))
-    (cond
-     (all
-      (jinx-correct-buffer))
-     ((not (jinx--word-valid-p beg))
-      (jinx-correct-at-point beg end))
-     (t
-      (jinx-correct-visible)))))
+  (if all
+      (jinx-correct-buffer)
+    (pcase-let* ((`(,beg . ,end) (jinx--bounds-of-word-at-point))
+                 (word (buffer-substring-no-properties beg end)))
+      (if (jinx--word-corrected-p word)
+          (jinx-correct-visible)
+        (jinx-correct-at-point beg end)))))
 
 (defun jinx-correct-select ()
   "Quick selection key for corrections."
