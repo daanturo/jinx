@@ -923,23 +923,37 @@ If prefix argument ALL non-nil correct all misspellings."
         (goto-char old-point)
         (jinx--in-base-buffer #'jit-lock-refontify (window-start) (window-end))))))
 
-;;;###autoload
-(defun jinx-correct-at-point ()
-  "Correct word at cursor.
+(defun jinx-correct-at-point (&optional beg end)
+  "Correct a word between BEG and END, defaults to the one at the cursor.
 Suggest corrections even if it's not misspelled."
   (interactive)
+  (unless (and beg end)
+    (setf (cons beg end) (jinx--bounds-of-word-at-point)))
   (jinx--guard-correction
-   (while (pcase-let* ((`(,beg . ,end) (jinx--bounds-of-word-at-point))
-                       (skip
-                        (catch 'jinx--goto
-                          (if (and beg end)
-                              (jinx--correct beg end)
-                            (user-error "No word at point")))))
+   (while (let ((skip
+                 (catch 'jinx--goto
+                   (if (and beg end)
+                       (jinx--correct beg end)
+                     (user-error "No word at point")))))
             ;; use jinx-next/previous to move among words
             (cond
              ((integerp skip)
               (forward-to-word skip)
               t))))))
+
+;;;###autoload
+(defun jinx-correct* (&optional all)
+  "Correct misspelled word at point, or visible ones.
+If prefix argument ALL non-nil correct all misspellings."
+  (interactive "*P")
+  (pcase-let* ((`(,beg . ,end) (jinx--bounds-of-word-at-point)))
+    (cond
+     (all
+      (jinx-correct-buffer))
+     ((not (jinx--word-valid-p beg))
+      (jinx-correct-at-point beg end))
+     (t
+      (jinx-correct-visible)))))
 
 (defun jinx-correct-select ()
   "Quick selection key for corrections."
