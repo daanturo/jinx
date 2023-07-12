@@ -911,21 +911,20 @@ If prefix argument ALL non-nil correct all misspellings."
       (push-mark))
     (unwind-protect
         (while (when-let ((ov (nth idx overlays)))
-                 (let* ((deleted (not (overlay-buffer ov)))
-                        (skip
-                         (catch 'jinx--goto
-                           (unless deleted
-                             (jinx--correct
-                              (overlay-start ov)
-                              (overlay-end ov)
-                              (and all (format " (%d of %d)" (1+ idx) count)))))))
-                   (cond
-                    ((integerp skip) (setq idx (mod (+ idx skip) count)))
-                    ((or all deleted) (cl-incf idx))))))
-      (if all
-          (jinx--in-base-buffer #'jit-lock-refontify)
-        (goto-char old-point)
-        (jinx--in-base-buffer #'jit-lock-refontify (window-start) (window-end))))))
+                 (if (not (overlay-buffer ov))
+                     (cl-incf idx) ;; Skip deleted overlay
+                   (let ((skip
+                          (catch 'jinx--goto
+                            (jinx--correct (overlay-start ov) (overlay-end ov)
+                                           (and all
+                                                (format " (%d of %d)"
+                                                        (1+ idx)
+                                                        count))))))
+                     (cond
+                      ((integerp skip) (setq idx (mod (+ idx skip) count)))
+                      (all (cl-incf idx)))))))
+      (unless all
+        (goto-char old-point)))))
 
 ;;;###autoload
 (defun jinx-correct-at-point (&optional beg end)
