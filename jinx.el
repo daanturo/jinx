@@ -768,17 +768,18 @@ If SHOW-COUNT is non-nil, show the index of the correcting words."
    (let* ((count (length overlays))
           (idx 0))
      (while (when-let ((ov (nth idx overlays)))
-              (let* ((deleted (not (overlay-buffer ov)))
-                     (skip
-                      (catch 'jinx--goto
-                        (unless deleted
-                          (jinx--correct
-                           (overlay-start ov)
-                           (overlay-end ov)
-                           (and show-count (format " (%d of %d)" (1+ idx) count)))))))
-                (cond
-                 ((integerp skip) (setq idx (mod (+ idx skip) count)))
-                 ((or show-count deleted) (cl-incf idx)))))))))
+              (if (not (overlay-buffer ov))
+                  (cl-incf idx) ;; Skip deleted overlay
+                (let ((skip
+                       (catch 'jinx--goto
+                         (jinx--correct (overlay-start ov) (overlay-end ov)
+                                        (and show-count
+                                             (format " (%d of %d)"
+                                                     (1+ idx)
+                                                     count))))))
+                  (cond
+                   ((integerp skip) (setq idx (mod (+ idx skip) count)))
+                   (show-count (cl-incf idx))))))))))
 
 (defun jinx--bounds-of-word-at-point ()
   "Return bounds of word at point as a cons cell.
@@ -877,20 +878,18 @@ With prefix argument GLOBAL change the languages globally."
 (defun jinx-correct-visible ()
   "Correct visibly misspelled words in current window."
   (interactive)
-  (unwind-protect
-      (jinx--correct-overlays
-       (jinx--force-overlays (window-start) (window-end) :visible t))
-    (jinx--in-base-buffer #'jit-lock-refontify (window-start) (window-end))))
+  (jinx--correct-overlays
+   (jinx--force-overlays (window-start) (window-end) :visible t)))
 
 ;;;###autoload
 (defun jinx-correct-buffer ()
   "Correct all misspelled words in current buffer."
   (interactive)
-  (unwind-protect
-      (jinx--correct-overlays
-       (jinx--force-overlays (point-min) (point-max) :check t)
-       t)
-    (jinx--in-base-buffer #'jit-lock-refontify)))
+  (jinx--correct-overlays (jinx--force-overlays
+                           (point-min)
+                           (point-max)
+                           :check t)
+                          t))
 
 ;;;###autoload
 (defun jinx-correct (&optional all)
