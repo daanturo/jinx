@@ -903,7 +903,10 @@ Suggest corrections even if the word is not misspelled."
     (jinx--correct-guard
      (while (when-let ((skip (jinx--correct-overlay (make-overlay beg end) nil)))
               (forward-to-word skip)
-              (setf (cons beg end) (jinx--bounds-of-word))
+              ;; no word found at buffer beg/end: stay at the previous word
+              (if-let ((bounds (jinx--bounds-of-word)))
+                (setf (cons beg end) bounds)
+                (backward-to-word skip))
               beg)))))
 
 ;;;###autoload
